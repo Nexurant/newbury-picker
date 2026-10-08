@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Newbury Pick Planner</title>
+<style>
+  :root {
+    /* Pastel palette: each colour has a pastel fill (-soft), a pastel edge, and a darker "ink" for readable text */
+    --bg: #f8f6f3; --card: #ffffff; --text: #33302d; --muted: #7d7670;
+    --border: #e6e1db; --row-alt: #fcfaf8;
+    --accent: #9ed8b2; --accent-soft: #e6f6eb; --accent-ink: #2f6b45;
+    --bad: #f3aaa5; --bad-soft: #fdeceb; --bad-ink: #9b3a35;
+    --info: #a8c9ec; --info-soft: #eaf2fb; --info-ink: #2f5a86;
+    --brand: #f7b68c; --brand-dark: #f2a072; --brand-soft: #fff1e7; --brand-ink: #8a4718;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 15px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  /* Main content on the left, result boxes pinned on the right */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+  .side { position: sticky; top: 16px; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { position: static; order: -1; }
+  }
+  h1 { margin: 0 0 16px; font-size: 24px; }
+  h2 { margin: 0 0 10px; font-size: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=number] {
+    width: 100%; padding: 8px 10px; font-size: 15px;
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  input[type=number]:focus { outline: 2px solid var(--brand); border-color: var(--brand); }
+
+  .result { font-size: 22px; font-weight: 600; padding: 16px; border-radius: 10px; margin-bottom: 16px; }
+  .result.ok  { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent); }
+  .result.bad { background: var(--bad-soft); color: var(--bad-ink); border: 1px solid var(--bad); }
+  .result.idle { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+  .result small { display: block; font-size: 14px; font-weight: 400; margin-top: 4px; color: var(--text); }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--muted); }
+  .summary b { color: var(--text); }
+
+  /* Progress bar: green = items we can pick, red = items left over */
+  .progress {
+    display: flex; height: 30px; margin-top: 14px; border-radius: 6px; overflow: hidden;
+    background: var(--row-alt); border: 1px solid var(--border);
+  }
+  .progress > div {
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    font-size: 13px; font-weight: 600; white-space: nowrap; transition: width 0.25s;
+  }
+  .progress-good { background: var(--accent); color: var(--accent-ink); }
+  .progress-gap { background: var(--bad); color: var(--bad-ink); }
+  .progress-note { margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--row-alt); }
+  td.num, th.num { text-align: right; }
+  tbody tr:nth-child(even) { background: var(--row-alt); }
+  tbody tr.finish { background: var(--accent-soft); font-weight: 600; }
+  td.hour { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td input[type=number] { max-width: 110px; padding: 5px 8px; }
+  .actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+  button {
+    padding: 8px 14px; border: 1px solid var(--border); background: var(--card);
+    border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  button:hover { border-color: var(--bad); background: var(--bad-soft); color: var(--bad-ink); }
+  .table-scroll { overflow-x: auto; }
+  .targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 6px; }
+  .target { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; text-align: center; }
+  .target span { display: block; font-size: 13px; color: var(--muted); }
+  .target b { font-size: 18px; }
+  .target.ok  { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .target.bad { background: var(--bad-soft); border-color: var(--bad); color: var(--bad-ink); }
+  .boost {
+    background: var(--info-soft); border: 1px solid var(--info); color: var(--info-ink);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .boost-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .boost-row {
+    display: flex; justify-content: space-between; gap: 8px; padding: 6px 0;
+    border-top: 1px solid var(--info); font-size: 15px;
+  }
+  .boost-row b { text-align: right; }
+  .boost .saved { font-weight: 400; font-size: 13px; color: var(--text); }
+  .boost-empty { color: var(--muted); font-size: 14px; }
+
+  /* Finish time is the headline figure: twice the size of the other boxes */
+  #result { font-size: 32px; padding: 20px 20px; line-height: 1.15; }
+  #result .head { display: block; font-size: 18px; }
+  #result .big { display: block; font-size: 44px; font-variant-numeric: tabular-nums; }
+  #result small { font-size: 15px; margin-top: 8px; }
+  #result.idle { font-size: 22px; }
+  [hidden] { display: none !important; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .top h1 { margin: 0; }
+  .menu { position: relative; }
+  .menu summary {
+    list-style: none; cursor: pointer; padding: 8px 14px; font-size: 14px; font-weight: 600;
+    background: var(--brand); color: var(--brand-ink); border: 1px solid var(--brand); border-radius: 6px;
+  }
+  .menu summary:hover { background: var(--brand-dark); }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu summary::after { content: " ▾"; }
+  .menu[open] summary { background: var(--brand-dark); }
+  .menu-panel input[type=checkbox] { accent-color: var(--brand); width: 16px; height: 16px; }
+
+  /* Orange brand touches */
+  body { border-top: 6px solid var(--brand); }
+  .top h1 { padding-left: 12px; border-left: 5px solid var(--brand); }
+  h2::before {
+    content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px;
+    border-radius: 50%; background: var(--brand); vertical-align: middle;
+  }
+  thead th { border-bottom: 2px solid var(--brand); }
+
+  /* Hours table header with the "Show additional hours" slider */
+  .table-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .table-head h2 { margin: 0; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; margin: 0; cursor: pointer; font-size: 14px; color: var(--text); }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .slider {
+    position: relative; width: 42px; height: 24px; border-radius: 12px;
+    background: var(--border); transition: background 0.2s; flex-shrink: 0;
+  }
+  .slider::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: transform 0.2s;
+  }
+  .switch input:checked + .slider { background: var(--brand); }
+  .switch input:checked + .slider::after { transform: translateX(18px); }
+  .switch input:focus-visible + .slider { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .menu-panel {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; min-width: 200px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+  }
+  .menu-panel label {
+    display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 0;
+    font-size: 14px; color: var(--text); cursor: pointer;
+  }
+
+  /* "?" help icons: hover (or tap) to show the explanation */
+  .help {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; margin-left: 4px; border-radius: 50%;
+    background: var(--brand); color: var(--brand-ink); font-size: 11px; font-weight: 700;
+    cursor: help; vertical-align: middle; outline: none;
+  }
+  .help::after {
+    content: attr(data-tip); position: absolute; left: -10px; bottom: calc(100% + 8px); z-index: 20;
+    width: 240px; padding: 8px 10px; border-radius: 6px;
+    background: var(--brand-soft); color: var(--brand-ink); border: 1px solid var(--brand);
+    font-size: 13px; font-weight: 400; line-height: 1.4; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    opacity: 0; visibility: hidden; transition: opacity 0.15s; pointer-events: none;
+  }
+  .help:hover::after, .help:focus::after { opacity: 1; visibility: visible; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Newbury Pick Planner</h1>
+    <details class="menu">
+      <summary>Additional Context</summary>
+      <div class="menu-panel">
+        <label><input type="checkbox" id="showLabour"> Labour overspend</label>
+        <label><input type="checkbox" id="showBoost"> IPH boost</label>
+      </div>
+    </details>
+  </header>
+
+  <div class="layout">
+  <div class="main">
+  <div class="card">
+    <h2>Forecast</h2>
+    <div class="inputs">
+      <div>
+        <label for="forecast">Forecasted items <span class="help" tabindex="0" data-tip="How many items were you expected to pick today based on Microstrategy forecasting?">?</span></label>
+        <input id="forecast" type="number" min="0" step="1" placeholder="e.g. 37500">
+      </div>
+      <div>
+        <label for="targetIph">Store target IPH <span class="help" tabindex="0" data-tip="What is the store's target IPH used to determine your labour?">?</span></label>
+        <input id="targetIph" type="number" min="0" step="1" placeholder="e.g. 189">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Actual</h2>
+    <div class="inputs">
+      <div>
+        <label for="items">Actual items <span class="help" tabindex="0" data-tip="How many items are you actually picking today?">?</span></label>
+        <input id="items" type="number" min="0" step="1" placeholder="e.g. 36000">
+      </div>
+      <div>
+        <label for="iph">Store actual IPH <span class="help" tabindex="0" data-tip="What is the store actually picking at?">?</span></label>
+        <input id="iph" type="number" min="0" step="1" placeholder="e.g. 185">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="summary" id="summary"></div>
+    <div class="progress" id="progress">
+      <div class="progress-good"></div>
+      <div class="progress-gap"></div>
+    </div>
+    <div class="progress-note" id="progressNote"></div>
+  </div>
+
+  <div class="card">
+    <label>Variance to target finish times (labour hours)</label>
+    <div class="targets" id="targets"></div>
+  </div>
+
+  <div class="card">
+    <div class="table-head">
+      <h2>Hourly labour plan</h2>
+      <label class="switch">
+        <span>Show additional hours</span>
+        <input type="checkbox" id="showExtraHours" role="switch">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Hour</th>
+            <th>Labour hours</th>
+            <th class="num">Items picked</th>
+            <th class="num">Items remaining</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="actions"><button id="clear">Clear all</button></div>
+  </div>
+  </div>
+
+  <aside class="side">
+    <div id="result" class="result idle">Enter actual items, actual IPH and labour hours</div>
+    <div id="labour" class="result idle">Enter forecast and target IPH to see the labour allowance</div>
+    <div id="boost" class="boost"></div>
+  </aside>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = "pickPlanner.v1";
+  const itemsInput = document.getElementById("items");
+  const iphInput = document.getElementById("iph");
+  const rowsBody = document.getElementById("rows");
+  const resultBox = document.getElementById("result");
+  const summaryBox = document.getElementById("summary");
+  const progressGood = document.querySelector(".progress-good");
+  const progressGap = document.querySelector(".progress-gap");
+  const progressNote = document.getElementById("progressNote");
+  const targetsBox = document.getElementById("targets");
+  const forecastInput = document.getElementById("forecast");
+  const targetIphInput = document.getElementById("targetIph");
+  const labourBox = document.getElementById("labour");
+  const boostBox = document.getElementById("boost");
+  const pad = n => String(n).padStart(2, "0");
+  const fmt = n => Math.round(n).toLocaleString();
+  // Shows hours rounded up to the next whole hour, e.g. 1.25 -> "2h"
+  const fmtHours = h => Math.ceil(h - 1e-9) + "h";
+
+  // Build the 24 hour rows
+  const labourInputs = [];
+  for (let h = 0; h < 24; h++) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="hour">${pad(h)}:00 - ${pad(h)}:59</td>
+      <td><input type="number" min="0" step="0.25" placeholder="0"></td>
+      <td class="num picked">0</td>
+      <td class="num remaining">-</td>`;
+    rowsBody.appendChild(tr);
+    labourInputs.push(tr.querySelector("input"));
+  }
+
+  const num = el => Math.max(0, parseFloat(el.value) || 0);
+
+  // Minutes after midnight shown as HH:MM (rounded up to the next minute)
+  function fmtTime(minutes) {
+    const mins = Math.ceil(minutes - 1e-9);
+    return mins >= 1440 ? "24:00" : `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
+  }
+
+  // Minutes after midnight when all items are picked, or null if the labour runs out first
+  function findFinish(totalItems, iph, labour) {
+    let remaining = totalItems;
+    for (let h = 0; h < labour.length; h++) {
+      const picked = labour[h] * iph;
+      if (picked > 0 && picked >= remaining) return h * 60 + (remaining / picked) * 60;
+      remaining -= picked;
+    }
+    return null;
+  }
+
+  function calculate() {
+    const totalItems = num(itemsInput);
+    const iph = num(iphInput);
+    const labour = labourInputs.map(num);
+    const totalLabour = labour.reduce((a, b) => a + b, 0);
+
+    let remaining = totalItems;
+    let finishMinutes = null; // minutes after midnight
+    let finishHour = null;
+
+    labour.forEach((hrs, h) => {
+      const row = rowsBody.children[h];
+      const picked = hrs * iph;
+      row.classList.remove("finish");
+
+      if (finishMinutes === null && picked > 0 && remaining > 0 && picked >= remaining) {
+        // Finishes partway through this hour
+        finishMinutes = h * 60 + (remaining / picked) * 60;
+        finishHour = h;
+      }
+      remaining = Math.max(0, remaining - picked);
+
+      row.querySelector(".picked").textContent = fmt(picked);
+      row.querySelector(".remaining").textContent = totalItems ? fmt(remaining) : "-";
+    });
+
+    // Variance = spare (+) or missing (-) labour hours
+    const variance = iph > 0 ? (totalLabour * iph - totalItems) / iph : 0;
+    const varianceText = (variance >= 0 ? "+" : "-") + fmtHours(Math.abs(variance));
+
+    summaryBox.innerHTML = `
+      <span>Total labour: <b>${fmtHours(totalLabour)}</b></span>
+      <span>Labour needed: <b>${iph > 0 ? fmtHours(totalItems / iph) : "-"}</b></span>
+      <span>Picking capability: <b>${fmt(totalLabour * iph)}</b> items</span>`;
+
+    // Progress bar towards picking all the actual items
+    const canPick = Math.min(totalLabour * iph, totalItems);
+    const leftOver = totalItems - canPick;
+    const goodPct = totalItems > 0 ? (canPick / totalItems) * 100 : 0;
+    progressGood.style.width = goodPct + "%";
+    progressGap.style.width = totalItems > 0 ? (100 - goodPct) + "%" : "0%";
+    // Only write numbers inside a segment when it is wide enough to fit them
+    progressGood.textContent = goodPct >= 12 ? fmt(canPick) : "";
+    progressGap.textContent = totalItems > 0 && 100 - goodPct >= 12 ? fmt(leftOver) : "";
+    if (!totalItems || !iph) {
+      progressNote.textContent = "Enter actual items, actual IPH and labour hours to see progress";
+    } else if (leftOver <= 0) {
+      progressNote.textContent = `All ${fmt(totalItems)} items will be picked (100%)`;
+    } else {
+      progressNote.textContent = `${fmt(canPick)} of ${fmt(totalItems)} items will be picked (${Math.floor(goodPct)}%) · ${fmt(leftOver)} items left`;
+    }
+
+    // Variance to each target finish: labour before the target minus labour needed
+    const TARGET_HOURS = [8, 9, 10, 11, 12];
+    const ready = totalItems > 0 && iph > 0;
+    targetsBox.innerHTML = TARGET_HOURS.map(t => {
+      const label = t < 12 ? `${t}am finish` : t === 12 ? "12pm finish" : `${t - 12}pm finish`;
+      if (!ready) return `<div class="target"><span>${label}</span><b>-</b></div>`;
+      const labourBefore = labour.slice(0, t).reduce((a, b) => a + b, 0);
+      const diff = labourBefore - totalItems / iph;
+      const text = (diff >= 0 ? "+" : "-") + fmtHours(Math.abs(diff));
+      return `<div class="target ${diff >= 0 ? "ok" : "bad"}"><span>${label}</span><b>${text}</b></div>`;
+    }).join("");
+
+    // Forecast allowance = forecast / store target IPH, rounded up.
+    // Once actual items are known, the allowance follows them at the same rate:
+    // more items than forecast gains labour, fewer items loses labour.
+    const forecast = num(forecastInput);
+    const targetIph = num(targetIphInput);
+    if (forecast > 0 && targetIph > 0) {
+      const baseAllowance = Math.ceil(forecast / targetIph - 1e-9);
+      const allowanceItems = totalItems > 0 ? totalItems : forecast;
+      const allowance = Math.ceil(allowanceItems / targetIph - 1e-9);
+      const change = allowance - baseAllowance;
+      const diff = totalLabour - allowance;
+      let changeText = "";
+      if (change > 0) {
+        changeText = `<br><b>(+${change}h labour allowance from over-forecast: ${fmt(totalItems - forecast)} extra items)</b>`;
+      } else if (change < 0) {
+        changeText = `<br><b>(-${-change}h labour allowance lost from under-forecast: ${fmt(forecast - totalItems)} fewer items)</b>`;
+      }
+      const detail = `<small>Allowance: ${allowance}h (${fmt(allowanceItems)} ÷ ${fmt(targetIph)}) · Forecast allowance: ${baseAllowance}h · Labour planned: ${fmtHours(totalLabour)}${changeText}</small>`;
+      if (diff > 0) {
+        labourBox.className = "result bad";
+        labourBox.innerHTML = `Overspending labour by ${fmtHours(diff)}${detail}`;
+      } else {
+        labourBox.className = "result ok";
+        labourBox.innerHTML = `Within labour allowance (${fmtHours(-diff)} remaining)${detail}`;
+      }
+    } else {
+      labourBox.className = "result idle";
+      labourBox.textContent = "Enter forecast and target IPH to see the labour allowance";
+    }
+
+    // IPH boost: below target -> next three steps of 5 plus the target; at/above target -> +2, +4, +6
+    if (ready) {
+      let boosts;
+      if (targetIph > 0 && iph < targetIph) {
+        const firstStep = Math.floor(iph / 5) * 5 + 5;
+        boosts = [firstStep, firstStep + 5, firstStep + 10, targetIph];
+      } else {
+        boosts = [iph + 2, iph + 4, iph + 6];
+      }
+      boosts = [...new Set(boosts)].sort((a, b) => a - b);
+      const rows = boosts.map(b => {
+        const mins = findFinish(totalItems, b, labour);
+        const label = `${fmt(b)} IPH${b === targetIph ? " (target)" : ""}`;
+        let value;
+        if (mins === null) {
+          const short = (totalItems - totalLabour * b) / b;
+          value = `No Finish Time (-${fmtHours(short)})`;
+        } else if (finishMinutes !== null) {
+          const saved = Math.ceil(finishMinutes - 1e-9) - Math.ceil(mins - 1e-9);
+          value = `${fmtTime(mins)} <span class="saved">(${saved} min earlier)</span>`;
+        } else {
+          value = fmtTime(mins);
+        }
+        return `<div class="boost-row"><span>${label}</span><b>${value}</b></div>`;
+      }).join("");
+      boostBox.innerHTML = `<div class="boost-title">Finish time with an IPH boost</div>${rows}`;
+    } else {
+      boostBox.innerHTML = `<div class="boost-title">Finish time with an IPH boost</div>
+        <div class="boost-empty">Enter actual items, actual IPH and labour hours</div>`;
+    }
+
+    if (!ready) {
+      resultBox.className = "result idle";
+      resultBox.textContent = "Enter actual items, actual IPH and labour hours";
+      return;
+    }
+
+    if (finishMinutes !== null) {
+      const time = fmtTime(finishMinutes);
+      rowsBody.children[finishHour].classList.add("finish");
+      resultBox.className = "result ok";
+      resultBox.innerHTML = `<span class="head">Finish Time</span>
+        <span class="big">${time}</span>
+        <span class="head">(${varianceText} variance)</span>
+        <small>${varianceText} labour hours compared with what is needed.</small>`;
+    } else {
+      const shortItems = totalItems - totalLabour * iph;
+      resultBox.className = "result bad";
+      resultBox.innerHTML = `<span class="head">No Finish Time</span>
+        <span class="big">${varianceText}</span>
+        <span class="head">variance</span>
+        <small>${fmt(shortItems)} items left unpicked. Add ${fmtHours(shortItems / iph)} more labour to finish.</small>`;
+    }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        items: itemsInput.value, iph: iphInput.value,
+        forecast: forecastInput.value, targetIph: targetIphInput.value,
+        labour: labourInputs.map(i => i.value)
+      }));
+    } catch (e) {}
+  }
+
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (!data) return;
+      itemsInput.value = data.items || "";
+      iphInput.value = data.iph || "";
+      forecastInput.value = data.forecast || "";
+      targetIphInput.value = data.targetIph || "";
+      (data.labour || []).forEach((v, i) => { if (labourInputs[i]) labourInputs[i].value = v; });
+    } catch (e) {}
+  }
+
+  document.addEventListener("input", () => { calculate(); save(); });
+  document.getElementById("clear").addEventListener("click", () => {
+    if (!confirm("Clear all inputs?")) return;
+    itemsInput.value = ""; iphInput.value = "";
+    forecastInput.value = ""; targetIphInput.value = "";
+    labourInputs.forEach(i => i.value = "");
+    calculate(); save();
+  });
+
+  // Additional Context options (hidden by default, remembered separately from the plan data)
+  const VIEW_KEY = "pickPlanner.view";
+  const showLabour = document.getElementById("showLabour");
+  const showBoost = document.getElementById("showBoost");
+  const showExtraHours = document.getElementById("showExtraHours");
+  // Hours outside 04:00 - 17:59 are hidden unless "Show additional hours" is ticked
+  const isAdditionalHour = h => h < 4 || h >= 18;
+
+  function applyView() {
+    labourBox.hidden = !showLabour.checked;
+    boostBox.hidden = !showBoost.checked;
+    [...rowsBody.children].forEach((row, h) => {
+      row.hidden = isAdditionalHour(h) && !showExtraHours.checked;
+    });
+  }
+
+  try {
+    const view = JSON.parse(localStorage.getItem(VIEW_KEY)) || {};
+    showLabour.checked = !!view.labour;
+    showBoost.checked = !!view.boost;
+    showExtraHours.checked = !!view.extraHours;
+  } catch (e) {}
+
+  [showLabour, showBoost, showExtraHours].forEach(box => box.addEventListener("change", () => {
+    applyView();
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({
+        labour: showLabour.checked, boost: showBoost.checked, extraHours: showExtraHours.checked
+      }));
+    } catch (e) {}
+  }));
+
+  load();
+  calculate();
+  applyView();
+</script>
+</body>
+</html>
