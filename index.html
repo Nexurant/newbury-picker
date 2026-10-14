@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Newbury Pick Planner</title>
+<title>Newbury Resource Planner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
 <style>
   :root {
     /* Pastel palette: each colour has a pastel fill (-soft), a pastel edge, and a darker "ink" for readable text */
@@ -13,20 +14,32 @@
     --accent: #9ed8b2; --accent-soft: #e6f6eb; --accent-ink: #2f6b45;
     --bad: #f3aaa5; --bad-soft: #fdeceb; --bad-ink: #9b3a35;
     --info: #a8c9ec; --info-soft: #eaf2fb; --info-ink: #2f5a86;
-    --brand: #f7b68c; --brand-dark: #f2a072; --brand-soft: #fff1e7; --brand-ink: #8a4718;
+    --brand: #f7b68c; --brand-dark: #f2a072; --brand-soft: #fff1e7; --brand-ink: #8a4718; --on-brand: #8a4718;
+    /* Text drawn on top of the solid pastel fills */
+    --on-accent: #2f6b45; --on-bad: #9b3a35;
+    --shadow: rgba(0, 0, 0, 0.1);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 15px;
   }
-  .wrap { max-width: 1120px; margin: 0 auto; }
-  /* Main content on the left, result boxes pinned on the right */
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
-  .side { position: sticky; top: 16px; }
+  button, select, input { font-family: inherit; }
+  .wrap { max-width: 1440px; margin: 0 auto; }
+  /* Inputs on the left, plan in the middle, result boxes pinned on the right */
+  .layout {
+    display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; gap: 16px; align-items: start;
+    grid-template-areas: "inputs main side";
+  }
+  .inputs-col { grid-area: inputs; }
+  .main { grid-area: main; }
+  .side { grid-area: side; position: sticky; top: 16px; }
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "inputs side" "main side"; }
+  }
   @media (max-width: 860px) {
-    .layout { grid-template-columns: 1fr; }
-    .side { position: static; order: -1; }
+    .layout { grid-template-columns: 1fr; grid-template-areas: "side" "inputs" "main"; }
+    .side { position: static; }
   }
   h1 { margin: 0 0 16px; font-size: 24px; }
   h2 { margin: 0 0 10px; font-size: 16px; }
@@ -36,11 +49,12 @@
   }
   .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input[type=number] {
-    width: 100%; padding: 8px 10px; font-size: 15px;
+  input, select, button { background: var(--card); color: var(--text); }
+  input[type=number], input[type=time] {
+    width: 100%; padding: 8px 10px; font-size: 15px; font-family: inherit;
     border: 1px solid var(--border); border-radius: 6px;
   }
-  input[type=number]:focus { outline: 2px solid var(--brand); border-color: var(--brand); }
+  input[type=number]:focus, input[type=time]:focus { outline: 2px solid var(--brand); border-color: var(--brand); }
 
   .result { font-size: 22px; font-weight: 600; padding: 16px; border-radius: 10px; margin-bottom: 16px; }
   .result.ok  { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent); }
@@ -48,8 +62,54 @@
   .result.idle { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
   .result small { display: block; font-size: 14px; font-weight: 400; margin-top: 4px; color: var(--text); }
 
-  .summary { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--muted); }
+  /* Collapsible "Details" panel attached under the Finish Time box */
+  #result { margin-bottom: 0; border-radius: 10px 10px 0 0; }
+  .finish-stats {
+    background: var(--card); border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 10px 10px; padding: 8px 16px; margin-bottom: 16px;
+  }
+  .finish-stats[open] { padding-bottom: 12px; }
+  #result.ok + .finish-stats { border-color: var(--accent); }
+  #result.bad + .finish-stats { border-color: var(--bad); }
+  .finish-stats > summary, .more > summary {
+    cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); list-style: none;
+  }
+  .finish-stats > summary::-webkit-details-marker, .more > summary::-webkit-details-marker { display: none; }
+  .finish-stats > summary::after, .more > summary::after { content: " ▾"; }
+  .finish-stats[open] > summary { margin-bottom: 8px; }
+  .finish-stats[open] > summary::after, .more[open] > summary::after { content: " ▴"; }
+  .detail-lines { font-size: 14px; line-height: 1.6; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .detail-lines:empty { display: none; }
+  .more { margin-top: 8px; }
+  .more > summary { color: inherit; opacity: 0.8; }
+  .more-lines { margin-top: 6px; font-size: 14px; font-weight: 400; line-height: 1.6; color: var(--text); }
+
+  /* Plan | check-in tabs above the results */
+  .view-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .view-tabs button {
+    padding: 6px 12px; font-size: 13px; font-weight: 600; border-radius: 6px 6px 0 0;
+    border-bottom: 2px solid transparent; background: var(--card); color: var(--muted);
+  }
+  .view-tabs button:hover { background: var(--brand-soft) !important; color: var(--brand-ink) !important; border-color: var(--border) !important; }
+  .view-tabs button.active { color: var(--brand-ink); border-color: var(--brand); border-bottom-color: var(--brand); background: var(--brand-soft); }
+  .view-note { font-size: 13px; color: var(--muted); }
+
+  /* Actual / Forecast columns only appear once there's a check-in */
+  #planTable.no-checkins .actual, #planTable.no-checkins .forecast { display: none; }
+
+  /* Test values button inside the Insights menu */
+  .menu-test { width: 100%; margin-top: 6px; font-size: 13px; }
+  .summary { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+  .summary span { display: flex; justify-content: space-between; gap: 8px; }
   .summary b { color: var(--text); }
+
+  /* Drop-down cards (shopper lists) */
+  .dropdown > summary { list-style: none; cursor: pointer; margin-bottom: 0; }
+  .dropdown > summary::-webkit-details-marker { display: none; }
+  .dropdown[open] > summary { margin-bottom: 10px; }
+  .dropdown .chev { margin-left: 8px; color: var(--muted); transition: transform 0.15s; }
+  .dropdown:not([open]) .chev { transform: rotate(-90deg); }
+  .dropdown > summary .shopper-summary { margin-left: auto; }
 
   /* Progress bar: green = items we can pick, red = items left over */
   .progress {
@@ -60,8 +120,8 @@
     display: flex; align-items: center; justify-content: center; overflow: hidden;
     font-size: 13px; font-weight: 600; white-space: nowrap; transition: width 0.25s;
   }
-  .progress-good { background: var(--accent); color: var(--accent-ink); }
-  .progress-gap { background: var(--bad); color: var(--bad-ink); }
+  .progress-good { background: var(--accent); color: var(--on-accent); }
+  .progress-gap { background: var(--bad); color: var(--on-bad); }
   .progress-note { margin-top: 6px; font-size: 13px; color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; }
@@ -72,17 +132,62 @@
   tbody tr.finish { background: var(--accent-soft); font-weight: 600; }
   td.hour { white-space: nowrap; font-variant-numeric: tabular-nums; }
   td input[type=number] { max-width: 110px; padding: 5px 8px; }
-  .actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+  /* No up/down arrows on any number box except the shoppers' overtime boxes */
+  input[type=number]:not(.ot-hours) { -moz-appearance: textfield; appearance: textfield; }
+  input[type=number]:not(.ot-hours)::-webkit-inner-spin-button,
+  input[type=number]:not(.ot-hours)::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  /* Shopper list (from the staffing sheet) */
+  .shopper-summary { font-size: 13px; color: var(--muted); }
+  .shopper-summary b { color: var(--text); }
+  .shopper-hint { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+  /* Compact rows to fit the left column: [✕] name / shift | hours | OT */
+  .shopper {
+    display: grid; grid-template-columns: 26px minmax(0, 1fr) auto 58px;
+    align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .shopper:nth-child(even) { background: var(--row-alt); }
+  .s-who { min-width: 0; }
+  .s-name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .s-shift { display: block; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .s-hours { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .s-ot { display: flex; align-items: center; gap: 2px; justify-content: flex-end; font-size: 12px; color: var(--muted); }
+  .s-ot input { width: 42px; padding: 3px 4px; font-size: 13px; }
+  .shopper button { padding: 3px 6px; font-size: 12px; }
+  .x-btn { width: 26px; height: 26px; padding: 0 !important; color: var(--bad-ink); border-color: var(--bad); background: var(--bad-soft); }
+  .ot-btn { color: var(--info-ink); border-color: var(--info); background: var(--info-soft); }
+  .ot-btn:hover { background: var(--info); color: var(--info-ink); border-color: var(--info); }
+  .shopper.absent .s-name { text-decoration: line-through; color: var(--muted); }
+  .shopper.absent .s-shift, .shopper.absent .s-hours { color: var(--bad-ink); }
+  .shopper.absent .x-btn { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+  .shopper.has-ot .s-hours { color: var(--info-ink); }
+
+  .upload-btn {
+    display: block; text-align: center; margin: 0; padding: 9px 12px; cursor: pointer;
+    font-size: 14px; font-weight: 600; color: var(--brand-ink);
+    background: var(--brand-soft); border: 1px solid var(--brand); border-radius: 6px;
+  }
+  .upload-btn:hover { background: var(--brand); color: var(--on-brand); }
+  .upload-status {
+    margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: 13px; line-height: 1.5;
+    background: var(--info-soft); border: 1px solid var(--info); color: var(--info-ink);
+  }
+  .upload-status.ok { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .upload-status.bad { background: var(--bad-soft); border-color: var(--bad); color: var(--bad-ink); }
+  #testValues:hover { border-color: var(--info) !important; background: var(--info-soft) !important; color: var(--info-ink) !important; }
   button {
     padding: 8px 14px; border: 1px solid var(--border); background: var(--card);
     border-radius: 6px; cursor: pointer; font-size: 14px;
   }
   button:hover { border-color: var(--bad); background: var(--bad-soft); color: var(--bad-ink); }
   .table-scroll { overflow-x: auto; }
-  .targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 6px; }
-  .target { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; text-align: center; }
-  .target span { display: block; font-size: 13px; color: var(--muted); }
-  .target b { font-size: 18px; }
+  /* Labour vs target finish tiles: five compact tiles in a row to fit the right-hand column */
+  .targets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 4px; }
+  .target { border: 1px solid var(--border); border-radius: 8px; padding: 6px 2px; text-align: center; }
+  .target span { display: block; font-size: 12px; color: var(--muted); }
+  .target b { font-size: 15px; white-space: nowrap; }
+  .side-targets .table-head { flex-direction: column; align-items: flex-start; gap: 0; margin-bottom: 6px; }
+  .side-targets h2 { margin: 0; }
   .target.ok  { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
   .target.bad { background: var(--bad-soft); border-color: var(--bad); color: var(--bad-ink); }
   .boost {
@@ -99,18 +204,77 @@
   .boost-empty { color: var(--muted); font-size: 14px; }
 
   /* Finish time is the headline figure: twice the size of the other boxes */
-  #result { font-size: 32px; padding: 20px 20px; line-height: 1.15; }
-  #result .head { display: block; font-size: 18px; }
-  #result .big { display: block; font-size: 44px; font-variant-numeric: tabular-nums; }
+  #result, #labour:not(.idle) { font-size: 32px; padding: 20px 20px; line-height: 1.15; }
+  #result .head, #labour .head { display: block; font-size: 18px; }
+  #result .big, #labour .big { display: block; font-size: 44px; font-variant-numeric: tabular-nums; }
+  #labour .big { font-size: 36px; }
+  #result .context, #labour .context { display: block; margin-top: 10px; padding-top: 8px; border-top: 1px solid currentColor; font-size: 14px; font-weight: 400; line-height: 1.6; color: var(--text); }
+  #result .context b, #labour .context b { font-weight: 600; }
   #result small { font-size: 15px; margin-top: 8px; }
+  /* Check-in box: same style as the Finish Time box, with its own attached stats panel */
+  /* Check-in log */
+  .add-checkin { width: 100%; margin-top: 12px; font-weight: 600; background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
+  .add-checkin:hover { background: var(--brand) !important; border-color: var(--brand) !important; color: var(--brand-ink) !important; }
+  .checkin-error { margin-top: 8px; font-size: 13px; color: var(--bad-ink); }
+  .checkin-log { margin-top: 10px; }
+  .checkin-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 4px;
+    border-top: 1px solid var(--border); font-size: 14px; font-variant-numeric: tabular-nums;
+  }
+  .checkin-row .ci-time { font-weight: 600; white-space: nowrap; }
+  .checkin-row .ci-left { flex: 1; }
+  .checkin-row.latest { background: var(--brand-soft); border-radius: 6px; }
+  .checkin-row .x-btn { width: 24px; height: 24px; font-size: 12px; }
+
+  /* Hourly table: hours already covered by a check-in, actual figures and the forecast */
+  tbody tr.done td { color: var(--muted); }
+  tbody tr.done td.hour { text-decoration: line-through; }
+  td.actual { font-weight: 600; color: var(--brand-ink); }
+  td.forecast { color: var(--info-ink); }
   #result.idle { font-size: 22px; }
   [hidden] { display: none !important; }
   .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
   .top h1 { margin: 0; }
   .menu { position: relative; }
+
+  /* Green confirmation bar across the top of the page (fades out on its own) */
+  .success-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+    padding: 12px 16px; text-align: center; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: opacity 0.6s, transform 0.6s;
+  }
+  .success-bar.hide { opacity: 0; transform: translateY(-100%); }
+  .top-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .morning-btn {
+    padding: 8px 14px; font-size: 14px; font-weight: 600; border-radius: 6px;
+    background: var(--info-soft); border: 1px solid var(--info); color: var(--info-ink);
+  }
+  .morning-btn:hover { background: var(--info) !important; border-color: var(--info) !important; color: var(--info-ink) !important; }
+
+  /* Morning message pop-up */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.3);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal {
+    width: 100%; max-width: 460px; background: var(--card); border-radius: 10px;
+    border-top: 6px solid var(--brand); padding: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  }
+  .modal h2 { margin: 0 0 4px; }
+  .modal-hint { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+  .modal textarea {
+    width: 100%; padding: 10px; font: inherit; font-size: 14px; line-height: 1.5; resize: vertical;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--row-alt); color: var(--text);
+  }
+  .modal textarea:focus { outline: 2px solid var(--brand); border-color: var(--brand); }
+  .modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .copy-btn { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
+  .copy-btn:hover { background: var(--brand) !important; border-color: var(--brand) !important; color: var(--brand-ink) !important; }
+  .copied { font-size: 13px; color: var(--accent-ink); font-weight: 600; margin-right: auto; }
   .menu summary {
     list-style: none; cursor: pointer; padding: 8px 14px; font-size: 14px; font-weight: 600;
-    background: var(--brand); color: var(--brand-ink); border: 1px solid var(--brand); border-radius: 6px;
+    background: var(--brand); color: var(--on-brand); border: 1px solid var(--brand); border-radius: 6px;
   }
   .menu summary:hover { background: var(--brand-dark); }
   .menu summary::-webkit-details-marker { display: none; }
@@ -146,7 +310,7 @@
   .menu-panel {
     position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; min-width: 200px;
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    padding: 10px 12px; box-shadow: 0 6px 18px var(--shadow);
   }
   .menu-panel label {
     display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 0;
@@ -157,7 +321,7 @@
   .help {
     position: relative; display: inline-flex; align-items: center; justify-content: center;
     width: 16px; height: 16px; margin-left: 4px; border-radius: 50%;
-    background: var(--brand); color: var(--brand-ink); font-size: 11px; font-weight: 700;
+    background: var(--brand); color: var(--on-brand); font-size: 11px; font-weight: 700;
     cursor: help; vertical-align: middle; outline: none;
   }
   .help::after {
@@ -171,62 +335,102 @@
 </style>
 </head>
 <body>
+<div class="success-bar" id="successBar" role="status" hidden>✓ Staffing sheet values successfully added</div>
 <div class="wrap">
   <header class="top">
-    <h1>Newbury Pick Planner</h1>
+    <h1>Newbury Resource Planner</h1>
+    <div class="top-right">
+    <button id="morningMsg" class="morning-btn">Generate morning message</button>
     <details class="menu">
-      <summary>Additional Context</summary>
+      <summary>Insights</summary>
       <div class="menu-panel">
-        <label><input type="checkbox" id="showLabour"> Labour overspend</label>
+        <label><input type="checkbox" id="showTargets"> Labour vs target finish</label>
+        <label><input type="checkbox" id="showLabour"> Labour spend</label>
         <label><input type="checkbox" id="showBoost"> IPH boost</label>
+        <button id="testValues" class="menu-test">Fill in test values</button>
       </div>
     </details>
+    </div>
   </header>
 
   <div class="layout">
-  <div class="main">
-  <div class="card">
-    <h2>Forecast</h2>
+  <div class="inputs-col">
+  <div class="card" id="sheetCard">
+    <h2>Staffing sheet</h2>
+    <label class="upload-btn">
+      <input type="file" id="uploadSheet" accept="application/pdf,.pdf" hidden>
+      Upload staffing sheet
+    </label>
+    <div class="upload-status" id="uploadStatus" hidden></div>
+  </div>
+
+  <details class="card dropdown collapsible" id="forecastCard" open>
+    <summary class="table-head"><h2>Forecast</h2><span class="chev">▾</span></summary>
     <div class="inputs">
       <div>
-        <label for="forecast">Forecasted items <span class="help" tabindex="0" data-tip="How many items were you expected to pick today based on Microstrategy forecasting?">?</span></label>
+        <label for="forecast">Forecasted items <span class="help" tabindex="-1" data-tip="How many items were you expected to pick today based on Microstrategy forecasting?">?</span></label>
         <input id="forecast" type="number" min="0" step="1" placeholder="e.g. 37500">
       </div>
       <div>
-        <label for="targetIph">Store target IPH <span class="help" tabindex="0" data-tip="What is the store's target IPH used to determine your labour?">?</span></label>
+        <label for="targetIph">Store target IPH <span class="help" tabindex="-1" data-tip="What is the store's target IPH used to determine your labour?">?</span></label>
         <input id="targetIph" type="number" min="0" step="1" placeholder="e.g. 189">
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="card">
-    <h2>Actual</h2>
+  <details class="card dropdown collapsible" id="actualCard" open>
+    <summary class="table-head"><h2>Actual</h2><span class="chev">▾</span></summary>
     <div class="inputs">
       <div>
-        <label for="items">Actual items <span class="help" tabindex="0" data-tip="How many items are you actually picking today?">?</span></label>
+        <label for="items">Actual items <span class="help" tabindex="-1" data-tip="How many items are you actually picking today?">?</span></label>
         <input id="items" type="number" min="0" step="1" placeholder="e.g. 36000">
       </div>
       <div>
-        <label for="iph">Store actual IPH <span class="help" tabindex="0" data-tip="What is the store actually picking at?">?</span></label>
+        <label for="iph">Store actual IPH <span class="help" tabindex="-1" data-tip="What is the store actually picking at?">?</span></label>
         <input id="iph" type="number" min="0" step="1" placeholder="e.g. 185">
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="card">
-    <div class="summary" id="summary"></div>
-    <div class="progress" id="progress">
-      <div class="progress-good"></div>
-      <div class="progress-gap"></div>
+  <details class="card dropdown collapsible" id="checkinCard" open>
+    <summary class="table-head"><h2>Progress check-in</h2><span class="chev">▾</span></summary>
+    <div class="inputs">
+      <div>
+        <label for="checkTime">Check-in time <span class="help" tabindex="-1" data-tip="What is the time now?">?</span></label>
+        <input id="checkTime" type="time" step="60">
+      </div>
+      <div>
+        <label for="checkLeft">Items remaining <span class="help" tabindex="-1" data-tip="How many items are left at this moment in time?">?</span></label>
+        <input id="checkLeft" type="number" min="0" step="1" placeholder="e.g. 20000">
+      </div>
     </div>
-    <div class="progress-note" id="progressNote"></div>
+    <button id="addCheckin" class="add-checkin">Add check-in</button>
+    <div class="checkin-error" id="checkinError" hidden></div>
+    <div class="checkin-log" id="checkinLog"></div>
+  </details>
+
+  <details class="card dropdown" id="shopperCard" hidden>
+    <summary class="table-head">
+      <h2>Shoppers</h2>
+      <span class="shopper-summary" id="shopperSummary"></span>
+      <span class="chev">▾</span>
+    </summary>
+    <p class="shopper-hint">✕ marks a shopper absent · + OT adds overtime after their shift</p>
+    <div class="shopper-list" id="shopperList"></div>
+  </details>
+
+  <details class="card dropdown" id="sameDayCard" hidden>
+    <summary class="table-head">
+      <h2>Same day shoppers</h2>
+      <span class="shopper-summary" id="sameDaySummary"></span>
+      <span class="chev">▾</span>
+    </summary>
+    <p class="shopper-hint">Shifts starting from 11:00 onwards</p>
+    <div class="shopper-list" id="sameDayList"></div>
+  </details>
   </div>
 
-  <div class="card">
-    <label>Variance to target finish times (labour hours)</label>
-    <div class="targets" id="targets"></div>
-  </div>
-
+  <div class="main">
   <div class="card">
     <div class="table-head">
       <h2>Hourly labour plan</h2>
@@ -237,13 +441,15 @@
       </label>
     </div>
     <div class="table-scroll">
-      <table>
+      <table id="planTable" class="no-checkins">
         <thead>
           <tr>
             <th>Hour</th>
             <th>Labour hours</th>
             <th class="num">Items picked</th>
-            <th class="num">Items remaining</th>
+            <th class="num">Planned remaining</th>
+            <th class="num actual">Actual</th>
+            <th class="num forecast">Forecast remaining</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -254,10 +460,41 @@
   </div>
 
   <aside class="side">
+    <div class="view-tabs" id="viewTabs" hidden></div>
     <div id="result" class="result idle">Enter actual items, actual IPH and labour hours</div>
+    <details class="finish-stats" id="finishDetails">
+      <summary>Details</summary>
+      <div class="detail-lines" id="detailLines"></div>
+      <div class="summary" id="summary"></div>
+      <div class="progress" id="progress">
+        <div class="progress-good"></div>
+        <div class="progress-gap"></div>
+      </div>
+      <div class="progress-note" id="progressNote"></div>
+    </details>
+    <div class="card side-targets" id="targetsCard" hidden>
+      <div class="table-head">
+        <h2>Labour vs target finish</h2>
+        <span class="view-note" id="targetsNote"></span>
+      </div>
+      <div class="targets" id="targets"></div>
+    </div>
     <div id="labour" class="result idle">Enter forecast and target IPH to see the labour allowance</div>
     <div id="boost" class="boost"></div>
   </aside>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="morningModal" hidden>
+  <div class="modal" role="dialog" aria-labelledby="morningTitle">
+    <h2 id="morningTitle">Morning message</h2>
+    <p class="modal-hint">Check it over, edit if needed, then copy it into the Teams chat.</p>
+    <textarea id="morningText" rows="9" spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <span class="copied" id="copiedNote" hidden>Copied ✓</span>
+      <button id="copyMorning" class="copy-btn">Copy message</button>
+      <button id="closeMorning">Close</button>
+    </div>
   </div>
 </div>
 
@@ -268,14 +505,23 @@
   const rowsBody = document.getElementById("rows");
   const resultBox = document.getElementById("result");
   const summaryBox = document.getElementById("summary");
-  const progressGood = document.querySelector(".progress-good");
-  const progressGap = document.querySelector(".progress-gap");
+  const progressGood = document.querySelector("#progress .progress-good");
+  const progressGap = document.querySelector("#progress .progress-gap");
   const progressNote = document.getElementById("progressNote");
   const targetsBox = document.getElementById("targets");
+  const targetsNote = document.getElementById("targetsNote");
+  const planTable = document.getElementById("planTable");
+  const detailLines = document.getElementById("detailLines");
   const forecastInput = document.getElementById("forecast");
   const targetIphInput = document.getElementById("targetIph");
   const labourBox = document.getElementById("labour");
   const boostBox = document.getElementById("boost");
+  const checkTimeInput = document.getElementById("checkTime");
+  const checkLeftInput = document.getElementById("checkLeft");
+  const addCheckinBtn = document.getElementById("addCheckin");
+  const checkinError = document.getElementById("checkinError");
+  const checkinLog = document.getElementById("checkinLog");
+  let checkins = []; // [{ t: minutes after midnight, left: items remaining }], sorted by time
   const pad = n => String(n).padStart(2, "0");
   const fmt = n => Math.round(n).toLocaleString();
   // Shows hours rounded up to the next whole hour, e.g. 1.25 -> "2h"
@@ -289,7 +535,9 @@
       <td class="hour">${pad(h)}:00 - ${pad(h)}:59</td>
       <td><input type="number" min="0" step="0.25" placeholder="0"></td>
       <td class="num picked">0</td>
-      <td class="num remaining">-</td>`;
+      <td class="num remaining">-</td>
+      <td class="num actual"></td>
+      <td class="num forecast"></td>`;
     rowsBody.appendChild(tr);
     labourInputs.push(tr.querySelector("input"));
   }
@@ -302,131 +550,266 @@
     return mins >= 1440 ? "24:00" : `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
   }
 
-  // Minutes after midnight when all items are picked, or null if the labour runs out first
-  function findFinish(totalItems, iph, labour) {
-    let remaining = totalItems;
+  // Minutes after midnight when all items are picked, starting from startMin
+  // (only labour after startMin is used), or null if the labour runs out first
+  function findFinishFrom(items, iph, labour, startMin) {
+    let remaining = items;
+    if (remaining <= 0) return startMin;
     for (let h = 0; h < labour.length; h++) {
-      const picked = labour[h] * iph;
-      if (picked > 0 && picked >= remaining) return h * 60 + (remaining / picked) * 60;
-      remaining -= picked;
+      const from = Math.max(h * 60, startMin);
+      const to = h * 60 + 60;
+      if (to <= from) continue;
+      const perMinute = labour[h] * iph / 60;
+      const capacity = perMinute * (to - from);
+      if (perMinute > 0 && capacity >= remaining) return from + remaining / perMinute;
+      remaining -= capacity;
     }
     return null;
   }
 
+  const findFinish = (totalItems, iph, labour) => findFinishFrom(totalItems, iph, labour, 0);
+
+  // Labour hours before and after a time of day (an hour is split if the time falls inside it)
+  function splitLabour(labour, atMin) {
+    let before = 0, after = 0;
+    labour.forEach((hrs, h) => {
+      const afterShare = Math.min(1, Math.max(0, (h * 60 + 60 - atMin) / 60));
+      after += hrs * afterShare;
+      before += hrs * (1 - afterShare);
+    });
+    return { before, after };
+  }
+
+  // ---- Check-ins ----
+  // The plan itself never changes. Each check-in records the real items left at a time of day,
+  // and its forecast uses the IPH actually achieved up to that point.
+  function forecastFrom(totalItems, iph, labour, c = checkins[checkins.length - 1]) {
+    if (!c || !totalItems || !iph) return null;
+    const { before: usedLabour, after: labourLeft } = splitLabour(labour, c.t);
+    const picked = totalItems - c.left;
+    const achievedIph = usedLabour > 0 && picked > 0 ? picked / usedLabour : null;
+    const rate = achievedIph || iph; // nothing picked yet (or no labour yet): fall back to planned IPH
+    const plannedLeft = Math.max(0, totalItems - usedLabour * iph);
+    return {
+      t: c.t, left: c.left, achievedIph, rate, labourLeft,
+      gap: c.left - plannedLeft, // positive = behind plan
+      finish: findFinishFrom(c.left, rate, labour, c.t),
+      plannedIphFinish: findFinishFrom(c.left, iph, labour, c.t)
+    };
+  }
+
+  function renderCheckins() {
+    checkinLog.innerHTML = checkins.map((c, i) => `
+      <div class="checkin-row${i === checkins.length - 1 ? " latest" : ""}">
+        <span class="ci-time">${fmtTime(c.t)}</span>
+        <span class="ci-left">${fmt(c.left)} items left</span>
+        <button class="x-btn" data-i="${i}" title="Remove this check-in">✕</button>
+      </div>`).join("");
+  }
+
+  addCheckinBtn.addEventListener("click", () => {
+    if (!checkTimeInput.value || checkLeftInput.value === "") {
+      checkinError.textContent = "Enter a check-in time and the items remaining.";
+      checkinError.hidden = false;
+      return;
+    }
+    checkinError.hidden = true;
+    const [hh, mm] = checkTimeInput.value.split(":").map(Number);
+    const t = hh * 60 + mm;
+    checkins = checkins.filter(c => c.t !== t); // a second check-in at the same time replaces the first
+    checkins.push({ t, left: num(checkLeftInput) });
+    checkins.sort((a, b) => a.t - b.t);
+    viewT = t; // jump straight to the new check-in's tab
+    checkTimeInput.value = ""; checkLeftInput.value = "";
+    renderCheckins(); calculate(); save();
+  });
+  checkLeftInput.addEventListener("keydown", e => { if (e.key === "Enter") addCheckinBtn.click(); });
+
+  checkinLog.addEventListener("click", e => {
+    const btn = e.target.closest("button[data-i]");
+    if (!btn) return;
+    checkins.splice(+btn.dataset.i, 1);
+    renderCheckins(); calculate(); save();
+  });
+
+  // ---- Plan | check-in tabs ----
+  // Which view the results show: null = the 4am plan, otherwise a check-in's time
+  let viewT = null;
+  const viewTabs = document.getElementById("viewTabs");
+  const selectedCheckin = () => checkins.find(c => c.t === viewT) || null;
+
+  function renderTabs() {
+    viewTabs.hidden = !checkins.length;
+    viewTabs.innerHTML = `<button data-t="">Plan</button>` +
+      checkins.map(c => `<button data-t="${c.t}">${fmtTime(c.t)} check-in</button>`).join("");
+    [...viewTabs.children].forEach(b => {
+      b.classList.toggle("active", (b.dataset.t === "" ? null : +b.dataset.t) === viewT);
+    });
+  }
+
+  viewTabs.addEventListener("click", e => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    viewT = btn.dataset.t === "" ? null : +btn.dataset.t;
+    calculate();
+  });
+
+  // Labour box "Details" stays open/closed between recalculations
+  let labourMoreOpen = false;
+  labourBox.addEventListener("toggle", e => {
+    if (e.target.classList.contains("more")) labourMoreOpen = e.target.open;
+  }, true);
+
+  const fmtSigned = h => (h >= 0 ? "+" : "-") + fmtHours(Math.abs(h));
+  const finishRow = minutes => rowsBody.children[Math.min(23, Math.max(0, Math.floor((Math.ceil(minutes - 1e-9) - 1) / 60)))];
+
   function calculate() {
     const totalItems = num(itemsInput);
     const iph = num(iphInput);
+    const targetIph = num(targetIphInput);
     const labour = labourInputs.map(num);
     const totalLabour = labour.reduce((a, b) => a + b, 0);
+    const ready = totalItems > 0 && iph > 0;
 
+    // Planned remaining at the end of each hour (the 4am plan never changes)
     let remaining = totalItems;
-    let finishMinutes = null; // minutes after midnight
-    let finishHour = null;
-
     labour.forEach((hrs, h) => {
       const row = rowsBody.children[h];
       const picked = hrs * iph;
-      row.classList.remove("finish");
-
-      if (finishMinutes === null && picked > 0 && remaining > 0 && picked >= remaining) {
-        // Finishes partway through this hour
-        finishMinutes = h * 60 + (remaining / picked) * 60;
-        finishHour = h;
-      }
       remaining = Math.max(0, remaining - picked);
-
+      row.classList.remove("finish");
       row.querySelector(".picked").textContent = fmt(picked);
       row.querySelector(".remaining").textContent = totalItems ? fmt(remaining) : "-";
     });
+    const planFinish = ready ? findFinish(totalItems, iph, labour) : null;
 
-    // Variance = spare (+) or missing (-) labour hours
-    const variance = iph > 0 ? (totalLabour * iph - totalItems) / iph : 0;
-    const varianceText = (variance >= 0 ? "+" : "-") + fmtHours(Math.abs(variance));
+    // The selected tab decides the scenario every result below is worked out from,
+    // so the boxes, tiles and table always agree with each other
+    if (viewT !== null && !selectedCheckin()) viewT = checkins.length ? checkins[checkins.length - 1].t : null;
+    renderTabs();
+    const fc = ready ? forecastFrom(totalItems, iph, labour, selectedCheckin()) : null;
+    const sc = fc
+      ? { start: fc.t, items: fc.left, rate: fc.rate, labourLeft: fc.labourLeft, finish: fc.finish }
+      : { start: 0, items: totalItems, rate: iph, labourLeft: totalLabour, finish: planFinish };
 
+    // Table: check-in figures sit on the row ending at (or just after) their time, e.g. 06:00 → 05:00-05:59,
+    // because the remaining columns mean "left at the end of this hour". Forecast follows the selected check-in.
+    planTable.classList.toggle("no-checkins", !checkins.length);
+    let forecastLeft = fc ? fc.left : 0;
+    labour.forEach((hrs, h) => {
+      const row = rowsBody.children[h];
+      const start = h * 60, end = start + 60;
+      const inHour = checkins.filter(c => c.t > start && c.t <= end || (h === 0 && c.t === 0)).pop();
+      row.querySelector("td.actual").innerHTML = inHour
+        ? `${fmt(inHour.left)}${inHour.t !== end ? ` <small>(${fmtTime(inHour.t)})</small>` : ""}` : "";
+      const forecastCell = row.querySelector("td.forecast");
+      row.classList.toggle("done", !!fc && end <= fc.t);
+      if (!fc || end <= fc.t) {
+        forecastCell.textContent = "";
+      } else {
+        forecastLeft = Math.max(0, forecastLeft - hrs * Math.min(1, (end - fc.t) / 60) * fc.rate);
+        forecastCell.textContent = fmt(forecastLeft);
+      }
+    });
+    if (ready && sc.items > 0 && sc.finish !== null) finishRow(sc.finish).classList.add("finish");
+
+    // Details panel: labour summary + progress bar for the selected view
+    const capability = sc.labourLeft * sc.rate;
     summaryBox.innerHTML = `
-      <span>Total labour: <b>${fmtHours(totalLabour)}</b></span>
-      <span>Labour needed: <b>${iph > 0 ? fmtHours(totalItems / iph) : "-"}</b></span>
-      <span>Picking capability: <b>${fmt(totalLabour * iph)}</b> items</span>`;
-
-    // Progress bar towards picking all the actual items
-    const canPick = Math.min(totalLabour * iph, totalItems);
-    const leftOver = totalItems - canPick;
-    const goodPct = totalItems > 0 ? (canPick / totalItems) * 100 : 0;
+      <span>${fc ? "Labour remaining" : "Total labour"} <b>${fmtHours(sc.labourLeft)}</b></span>
+      <span>Labour needed <b>${ready ? fmtHours(sc.items / sc.rate) : "-"}</b></span>
+      <span>Picking capability <b>${ready ? fmt(capability) + " items" : "-"}</b></span>`;
+    const canPick = Math.min(capability, sc.items);
+    const leftOver = sc.items - canPick;
+    const goodPct = sc.items > 0 ? (canPick / sc.items) * 100 : 0;
     progressGood.style.width = goodPct + "%";
-    progressGap.style.width = totalItems > 0 ? (100 - goodPct) + "%" : "0%";
-    // Only write numbers inside a segment when it is wide enough to fit them
+    progressGap.style.width = sc.items > 0 ? (100 - goodPct) + "%" : "0%";
     progressGood.textContent = goodPct >= 12 ? fmt(canPick) : "";
-    progressGap.textContent = totalItems > 0 && 100 - goodPct >= 12 ? fmt(leftOver) : "";
-    if (!totalItems || !iph) {
+    progressGap.textContent = sc.items > 0 && 100 - goodPct >= 12 ? fmt(leftOver) : "";
+    const ofWhat = fc ? `the ${fmt(sc.items)} items left` : `${fmt(sc.items)} items`;
+    if (!ready) {
       progressNote.textContent = "Enter actual items, actual IPH and labour hours to see progress";
     } else if (leftOver <= 0) {
-      progressNote.textContent = `All ${fmt(totalItems)} items will be picked (100%)`;
+      progressNote.textContent = `All of ${ofWhat} will be picked (100%)`;
     } else {
-      progressNote.textContent = `${fmt(canPick)} of ${fmt(totalItems)} items will be picked (${Math.floor(goodPct)}%) · ${fmt(leftOver)} items left`;
+      progressNote.textContent = `${fmt(canPick)} of ${ofWhat} will be picked (${Math.floor(goodPct)}%) · ${fmt(leftOver)} items short`;
     }
 
-    // Variance to each target finish: labour before the target minus labour needed
+    // Labour vs target finish tiles: labour between the view's start and each target, minus labour needed
     const TARGET_HOURS = [8, 9, 10, 11, 12];
-    const ready = totalItems > 0 && iph > 0;
-    targetsBox.innerHTML = TARGET_HOURS.map(t => {
-      const label = t < 12 ? `${t}am finish` : t === 12 ? "12pm finish" : `${t - 12}pm finish`;
+    targetsNote.textContent = fc ? `from the ${fmtTime(fc.t)} check-in` : "";
+    const labourAfterStart = splitLabour(labour, sc.start).after;
+    targetsBox.innerHTML = TARGET_HOURS.map(T => {
+      const label = T < 12 ? `${T}am` : T === 12 ? "12pm" : `${T - 12}pm`;
       if (!ready) return `<div class="target"><span>${label}</span><b>-</b></div>`;
-      const labourBefore = labour.slice(0, t).reduce((a, b) => a + b, 0);
-      const diff = labourBefore - totalItems / iph;
-      const text = (diff >= 0 ? "+" : "-") + fmtHours(Math.abs(diff));
-      return `<div class="target ${diff >= 0 ? "ok" : "bad"}"><span>${label}</span><b>${text}</b></div>`;
+      if (T * 60 <= sc.start) return `<div class="target"><span>${label}</span><b>Passed</b></div>`;
+      const diff = labourAfterStart - splitLabour(labour, T * 60).after - sc.items / sc.rate;
+      return `<div class="target ${diff >= 0 ? "ok" : "bad"}"><span>${label}</span><b>${fmtSigned(diff)}</b></div>`;
     }).join("");
 
-    // Forecast allowance = forecast / store target IPH, rounded up.
-    // Once actual items are known, the allowance follows them at the same rate:
-    // more items than forecast gains labour, fewer items loses labour.
+    // Labour box (whole day). Forecast allowance = forecast / store target IPH, rounded up; once actual
+    // items are known the allowance follows them at the same rate.
     const forecast = num(forecastInput);
-    const targetIph = num(targetIphInput);
     if (forecast > 0 && targetIph > 0) {
       const baseAllowance = Math.ceil(forecast / targetIph - 1e-9);
       const allowanceItems = totalItems > 0 ? totalItems : forecast;
       const allowance = Math.ceil(allowanceItems / targetIph - 1e-9);
       const change = allowance - baseAllowance;
-      const diff = totalLabour - allowance;
-      let changeText = "";
+
+      // IPH effect: below target needs more labour, above target saves labour. Savings come off the labour
+      // counted against the allowance, in whole hours rounded down so a saving is never overstated.
+      const iphEffect = totalItems > 0 && iph > 0 && Math.round(iph) !== Math.round(targetIph)
+        ? totalItems / iph - totalItems / targetIph // + = extra labour needed
+        : 0;
+      const iphSaving = Math.max(0, Math.floor(-iphEffect + 1e-9));
+      const diff = totalLabour - iphSaving - allowance;
+
+      const more = [];
+      if (iphSaving > 0) {
+        more.push(`IPH: Saving <b>${iphSaving}h</b> from ${fmt(iph)} IPH (vs ${fmt(targetIph)} IPH target)`);
+      } else if (iphEffect > 0) {
+        more.push(`IPH: Needing <b>${fmtHours(iphEffect)}</b> extra from ${fmt(iph)} IPH (vs ${fmt(targetIph)} IPH target)`);
+      }
       if (change > 0) {
-        changeText = `<br><b>(+${change}h labour allowance from over-forecast: ${fmt(totalItems - forecast)} extra items)</b>`;
+        more.push(`Forecast: Gaining <b>${change}h</b> (${fmt(totalItems - forecast)} items over forecast)`);
       } else if (change < 0) {
-        changeText = `<br><b>(-${-change}h labour allowance lost from under-forecast: ${fmt(forecast - totalItems)} fewer items)</b>`;
+        more.push(`Forecast: Losing <b>${-change}h</b> (${fmt(forecast - totalItems)} items under forecast)`);
       }
-      const detail = `<small>Allowance: ${allowance}h (${fmt(allowanceItems)} ÷ ${fmt(targetIph)}) · Forecast allowance: ${baseAllowance}h · Labour planned: ${fmtHours(totalLabour)}${changeText}</small>`;
-      if (diff > 0) {
-        labourBox.className = "result bad";
-        labourBox.innerHTML = `Overspending labour by ${fmtHours(diff)}${detail}`;
-      } else {
-        labourBox.className = "result ok";
-        labourBox.innerHTML = `Within labour allowance (${fmtHours(-diff)} remaining)${detail}`;
-      }
+      const context = `<span class="context">Labour: Using <b>${fmtHours(totalLabour)}</b> vs <b>${allowance}h</b> allowance` +
+        (more.length ? `<details class="more"${labourMoreOpen ? " open" : ""}><summary>Details</summary>
+          <div class="more-lines">${more.join("<br>")}</div></details>` : "") + `</span>`;
+
+      labourBox.className = "result " + (diff > 0 ? "bad" : "ok");
+      labourBox.innerHTML = diff > 0
+        ? `<span class="head">Labour Overspend</span><span class="big">+${fmtHours(diff)}</span>
+           <span class="head">over allowance</span>${context}`
+        : `<span class="head">Within Labour Allowance</span><span class="big">${fmtHours(-diff)}</span>
+           <span class="head">remaining</span>${context}`;
     } else {
       labourBox.className = "result idle";
       labourBox.textContent = "Enter forecast and target IPH to see the labour allowance";
     }
 
-    // IPH boost: below target -> next three steps of 5 plus the target; at/above target -> +2, +4, +6
-    if (ready) {
+    // IPH boost for the selected view. Below target: next three steps of 5 plus the target; otherwise +2, +4, +6
+    if (ready && sc.items > 0) {
+      const base = Math.round(sc.rate);
       let boosts;
-      if (targetIph > 0 && iph < targetIph) {
-        const firstStep = Math.floor(iph / 5) * 5 + 5;
+      if (targetIph > 0 && base < targetIph) {
+        const firstStep = Math.floor(base / 5) * 5 + 5;
         boosts = [firstStep, firstStep + 5, firstStep + 10, targetIph];
       } else {
-        boosts = [iph + 2, iph + 4, iph + 6];
+        boosts = [base + 2, base + 4, base + 6];
       }
       boosts = [...new Set(boosts)].sort((a, b) => a - b);
       const rows = boosts.map(b => {
-        const mins = findFinish(totalItems, b, labour);
+        const mins = findFinishFrom(sc.items, b, labour, sc.start);
         const label = `${fmt(b)} IPH${b === targetIph ? " (target)" : ""}`;
         let value;
         if (mins === null) {
-          const short = (totalItems - totalLabour * b) / b;
-          value = `No Finish Time (-${fmtHours(short)})`;
-        } else if (finishMinutes !== null) {
-          const saved = Math.ceil(finishMinutes - 1e-9) - Math.ceil(mins - 1e-9);
-          value = `${fmtTime(mins)} <span class="saved">(${saved} min earlier)</span>`;
+          value = `No Finish Time (-${fmtHours((sc.items - sc.labourLeft * b) / b)})`;
+        } else if (sc.finish !== null) {
+          const saved = Math.ceil(sc.finish - 1e-9) - Math.ceil(mins - 1e-9);
+          value = `${fmtTime(mins)} <span class="saved">(${fmtDuration(saved / 60)} earlier)</span>`;
         } else {
           value = fmtTime(mins);
         }
@@ -438,27 +821,68 @@
         <div class="boost-empty">Enter actual items, actual IPH and labour hours</div>`;
     }
 
+    // Finish Time box: short headline; everything else lives in the Details panel underneath
+    detailLines.innerHTML = "";
     if (!ready) {
       resultBox.className = "result idle";
       resultBox.textContent = "Enter actual items, actual IPH and labour hours";
       return;
     }
-
-    if (finishMinutes !== null) {
-      const time = fmtTime(finishMinutes);
-      rowsBody.children[finishHour].classList.add("finish");
+    if (fc) {
+      showForecast(fc, iph, planFinish);
+      return;
+    }
+    const varianceText = fmtSigned(totalLabour - totalItems / iph);
+    if (planFinish !== null) {
       resultBox.className = "result ok";
       resultBox.innerHTML = `<span class="head">Finish Time</span>
-        <span class="big">${time}</span>
-        <span class="head">(${varianceText} variance)</span>
-        <small>${varianceText} labour hours compared with what is needed.</small>`;
+        <span class="big">${fmtTime(planFinish)}</span>
+        <span class="head">(${varianceText} variance)</span>`;
     } else {
-      const shortItems = totalItems - totalLabour * iph;
       resultBox.className = "result bad";
       resultBox.innerHTML = `<span class="head">No Finish Time</span>
         <span class="big">${varianceText}</span>
-        <span class="head">variance</span>
-        <small>${fmt(shortItems)} items left unpicked. Add ${fmtHours(shortItems / iph)} more labour to finish.</small>`;
+        <span class="head">variance · ${fmt(totalItems - totalLabour * iph)} items short</span>`;
+    }
+  }
+
+  // Finish Time box for a check-in tab: forecast at achieved IPH and one "Plan was" line;
+  // planned IPH, ahead/behind and achieved IPH go in the Details panel
+  function showForecast(fc, iph, planFinish) {
+    if (fc.left <= 0) {
+      resultBox.className = "result ok";
+      resultBox.innerHTML = `<span class="head">Picking Complete</span>
+        <span class="big">Done</span>
+        <span class="head">All items picked by ${fmtTime(fc.t)}</span>`;
+      return;
+    }
+
+    let planLine = `Plan was <b>${planFinish === null ? "No Finish Time" : fmtTime(planFinish)}</b>`;
+    if (fc.finish !== null && planFinish !== null) {
+      const diff = Math.ceil(planFinish - 1e-9) - Math.ceil(fc.finish - 1e-9); // minutes, + = earlier than plan
+      if (diff !== 0) planLine += ` · <b>${fmtDuration(Math.abs(diff) / 60)} ${diff > 0 ? "earlier" : "later"}</b>`;
+    }
+
+    const vsPlan = Math.abs(fc.gap) < 1 ? "On plan"
+      : `${fc.gap > 0 ? "Behind" : "Ahead of"} plan by <b>${fmt(Math.abs(fc.gap))}</b> items at ${fmtTime(fc.t)}`;
+    detailLines.innerHTML = fc.achievedIph
+      ? `Achieved IPH: <b>${fmt(fc.achievedIph)}</b> (planned ${fmt(iph)})
+         <br>At planned IPH: <b>${fc.plannedIphFinish === null ? "No Finish Time" : fmtTime(fc.plannedIphFinish)}</b>
+         <br>${vsPlan}`
+      : `No picks or labour before ${fmtTime(fc.t)} yet, so using planned IPH (${fmt(iph)})<br>${vsPlan}`;
+
+    const varianceText = fmtSigned(fc.labourLeft - fc.left / fc.rate);
+    const context = `<span class="context">${planLine}</span>`;
+    if (fc.finish !== null) {
+      resultBox.className = "result ok";
+      resultBox.innerHTML = `<span class="head">Forecast Finish</span>
+        <span class="big">${fmtTime(fc.finish)}</span>
+        <span class="head">(${varianceText} variance)</span>${context}`;
+    } else {
+      resultBox.className = "result bad";
+      resultBox.innerHTML = `<span class="head">No Forecast Finish</span>
+        <span class="big">${varianceText}</span>
+        <span class="head">variance · ${fmt(fc.left - fc.labourLeft * fc.rate)} items short</span>${context}`;
     }
   }
 
@@ -467,6 +891,9 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         items: itemsInput.value, iph: iphInput.value,
         forecast: forecastInput.value, targetIph: targetIphInput.value,
+        checkins,
+        shoppers: shoppers.map(({ name, slots, absent, ot }) => ({ name, slots, absent, ot })),
+        sheetLoaded,
         labour: labourInputs.map(i => i.value)
       }));
     } catch (e) {}
@@ -480,23 +907,486 @@
       iphInput.value = data.iph || "";
       forecastInput.value = data.forecast || "";
       targetIphInput.value = data.targetIph || "";
+      checkins = Array.isArray(data.checkins) ? data.checkins : [];
+      viewT = checkins.length ? checkins[checkins.length - 1].t : null;
+      renderCheckins();
+      shoppers = Array.isArray(data.shoppers) ? data.shoppers : [];
+      setSheetLoaded(!!data.sheetLoaded);
+      // Older saves stored "First Last": switch them to "Last, First" and re-sort
+      shoppers.forEach(s => {
+        if (!s.name.includes(",") && s.name.includes(" ")) {
+          const words = s.name.split(" ");
+          s.name = `${words.pop()}, ${words.join(" ")}`;
+        }
+      });
+      shoppers.sort(byName);
+      renderShoppers();
       (data.labour || []).forEach((v, i) => { if (labourInputs[i]) labourInputs[i].value = v; });
     } catch (e) {}
   }
 
   document.addEventListener("input", () => { calculate(); save(); });
+
+  // Stop the mouse wheel changing number boxes: un-focus the box so the wheel scrolls the page instead
+  document.addEventListener("wheel", e => {
+    if (e.target.type === "number" && e.target === document.activeElement) e.target.blur();
+  }, { passive: true });
   document.getElementById("clear").addEventListener("click", () => {
     if (!confirm("Clear all inputs?")) return;
     itemsInput.value = ""; iphInput.value = "";
     forecastInput.value = ""; targetIphInput.value = "";
+    checkTimeInput.value = ""; checkLeftInput.value = "";
+    checkins = []; renderCheckins(); checkinError.hidden = true;
     labourInputs.forEach(i => i.value = "");
+    shoppers = []; renderShoppers();
+    setSheetLoaded(false);
     calculate(); save();
   });
 
-  // Additional Context options (hidden by default, remembered separately from the plan data)
+  // ---- Staffing sheet upload (Staffing Sheet Detail - Daily PDF) ----
+  // The PDF reader (PDF.js) is only downloaded the first time a sheet is uploaded.
+  const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+  let pdfjsReady = null;
+  function loadPdfJs() {
+    if (!pdfjsReady) {
+      pdfjsReady = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = PDFJS_URL + "pdf.min.js";
+        script.onload = () => {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_URL + "pdf.worker.min.js";
+          resolve(pdfjsLib);
+        };
+        script.onerror = () => {
+          pdfjsReady = null;
+          reject(new Error("Could not load the PDF reader. Check your internet connection and try again."));
+        };
+        document.head.appendChild(script);
+      });
+    }
+    return pdfjsReady;
+  }
+
+  // Reads the "Scheduled" row of every "Summary of locations" table.
+  // Each value is one 15-minute slot, starting at the first hour in that table's header.
+  async function readStaffingSheet(file) {
+    const lib = await loadPdfJs();
+    const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const quarters = {}; // hour -> [four 15-minute figures]
+    const shopperMap = new Map(); // "Surname, First" -> Set of 15-minute slots (0 = 00:00, 1 = 00:15, ...)
+    let date = "";
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const items = (await page.getTextContent()).items
+        .filter(i => i.str.trim())
+        .map(i => ({ x: i.transform[4], y: i.transform[5], s: i.str.trim() }));
+      const summary = items.find(i => i.s.startsWith("Summary of locations"));
+      readShopperRows(lib, await page.getOperatorList(), items, summary, shopperMap);
+      if (!summary) continue;
+      const sameRow = (a, b) => Math.abs(a.y - b.y) < 3;
+
+      const dateItem = items.find(i => sameRow(i, summary) && /^\d{2}\/\d{2}\/\d{4}$/.test(i.s));
+      if (dateItem) date = dateItem.s;
+
+      const below = items.filter(i => i.y < summary.y - 1);
+      const hourLabels = below.filter(i => /^\d{1,2}:00$/.test(i.s));
+      const scheduled = below.find(i => i.s === "Scheduled");
+      if (!hourLabels.length || !scheduled) continue;
+      const headerY = Math.max(...hourLabels.map(i => i.y));
+      const startHour = Math.min(...hourLabels.filter(i => Math.abs(i.y - headerY) < 3).map(i => parseInt(i.s, 10)));
+
+      below
+        .filter(i => sameRow(i, scheduled) && i.x > scheduled.x && /^-?\d+(\.\d+)?$/.test(i.s))
+        .sort((a, b) => a.x - b.x)
+        .forEach((item, n) => {
+          const h = startHour + Math.floor(n / 4);
+          if (h < 24) (quarters[h] = quarters[h] || []).push(parseFloat(item.s));
+        });
+    }
+    const shoppers = [...shopperMap].map(([raw, slots]) => ({
+      name: displayName(raw), slots: [...slots].sort((a, b) => a - b), absent: false, ot: 0
+    })).filter(s => s.slots.length).sort(byName);
+    return { quarters, date, shoppers };
+  }
+
+  // Shopper rows: a white name cell on the left, and a grey box for every 15 minutes they are scheduled.
+  function readShopperRows(lib, ops, items, summary, shopperMap) {
+    const OPS = lib.OPS;
+    const rects = [];
+    let fill = "";
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i], args = ops.argsArray[i];
+      if (fn === OPS.setFillRGBColor) fill = Array.from(args).join(",");
+      else if (fn === OPS.constructPath && args[0].length === 1 && args[0][0] === OPS.rectangle &&
+               ops.fnArray[i + 1] === OPS.fill) {
+        const [x, y, w, h] = args[1];
+        rects.push({ x, y, w, h, fill });
+      }
+    }
+    // Ignore the summary table at the bottom of the last page
+    const inShopperTable = r => !summary || r.y > summary.y;
+
+    // Time grid: the widest blue header bar, split into 15-minute slots for the hours shown
+    const header = rects.filter(r => r.fill === "10,117,193").sort((a, b) => b.w - a.w)[0];
+    const hourLabels = items.filter(i => /^\d{1,2}:00$/.test(i.s));
+    if (!header || !hourLabels.length) return;
+    const topY = Math.max(...hourLabels.map(i => i.y));
+    const topHours = hourLabels.filter(i => Math.abs(i.y - topY) < 3).map(i => parseInt(i.s, 10));
+    const firstSlot = Math.min(...topHours) * 4;
+    const slotWidth = header.w / (topHours.length * 4);
+
+    const nameCells = rects.filter(r => r.fill === "255,255,255" && Math.abs(r.x + r.w - header.x) < 1.5 &&
+                                        r.w < 100 && r.y + r.h < header.y && inShopperTable(r));
+    const boxes = rects.filter(r => r.fill === "192,192,192" && r.x >= header.x - 0.5 && inShopperTable(r));
+
+    nameCells.forEach(cell => {
+      const inCell = y => y > cell.y && y < cell.y + cell.h;
+      const raw = items
+        .filter(i => i.x >= cell.x && i.x < header.x && inCell(i.y))
+        .sort((a, b) => b.y - a.y || a.x - b.x)
+        .map(i => i.s).join(" ");
+      if (!raw) return;
+      if (!shopperMap.has(raw)) shopperMap.set(raw, new Set());
+      boxes.filter(b => inCell(b.y + b.h / 2)).forEach(b => {
+        shopperMap.get(raw).add(firstSlot + Math.round((b.x - header.x) / slotWidth));
+      });
+    });
+  }
+
+  // "Badaki, Ireoluwawolede A" -> "Badaki, Ireoluwawolede" (surname first like the report, middle initials dropped)
+  function displayName(raw) {
+    const titleCase = s => s.trim().toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+    const comma = raw.indexOf(",");
+    if (comma < 0) return titleCase(raw);
+    const last = raw.slice(0, comma);
+    const first = raw.slice(comma + 1).trim().split(/\s+/).filter(w => w.length > 1).join(" ");
+    return first ? `${titleCase(last)}, ${titleCase(first)}` : titleCase(last);
+  }
+
+  const byName = (a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" });
+
+  // ---- Shopper list ----
+  let shoppers = [];
+  const shopperCard = document.getElementById("shopperCard");
+  const shopperList = document.getElementById("shopperList");
+  const shopperSummary = document.getElementById("shopperSummary");
+  const sameDayCard = document.getElementById("sameDayCard");
+  const sameDayList = document.getElementById("sameDayList");
+  const sameDaySummary = document.getElementById("sameDaySummary");
+  // Shifts starting at 11:00 or later go in the "Same day shoppers" box
+  const SAME_DAY_FROM = 11 * 4;
+  const isSameDay = s => s.slots[0] >= SAME_DAY_FROM;
+  const slotTime = s => `${pad(Math.floor(s / 4) % 24)}:${pad((s % 4) * 15)}`;
+  // 2.75 -> "2h 45m", 0.25 -> "15m", 3 -> "3h"
+  const fmtDuration = h => {
+    const mins = Math.round(h * 60);
+    const hrs = Math.floor(mins / 60), rest = mins % 60;
+    if (!hrs && rest) return `${rest}m`;
+    return `${hrs}h${rest ? " " + rest + "m" : ""}`;
+  };
+  const escapeHtml = s => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+
+  // Slots a shopper is actually working: none if absent, plus any overtime after their shift
+  function workingSlots(s) {
+    if (s.absent) return [];
+    const slots = [...s.slots];
+    const extra = Math.round((s.ot || 0) * 4);
+    for (let i = 0; i < extra && slots.length; i++) slots.push(slots[slots.length - 1] + 1);
+    return slots.filter(q => q < 96);
+  }
+
+  // "04:00 – 08:00", or several ranges if there is a gap in the shift
+  function shiftText(slots) {
+    const parts = [];
+    slots.forEach((q, i) => {
+      if (i === 0 || q !== slots[i - 1] + 1) parts.push([q, q]);
+      else parts[parts.length - 1][1] = q;
+    });
+    return parts.map(([a, b]) => `${slotTime(a)} – ${slotTime(b + 1)}`).join(", ");
+  }
+
+  function shopperRowParts(s) {
+    const slots = s.absent ? s.slots : workingSlots(s);
+    return {
+      shift: shiftText(slots),
+      hours: s.absent ? "Absent" : fmtDuration(slots.length / 4)
+    };
+  }
+
+  function renderShoppers() {
+    const rowHtml = (s, i) => {
+      const { shift, hours } = shopperRowParts(s);
+      const showOt = !s.absent && (s.otOpen || s.ot > 0);
+      return `<div class="shopper${s.absent ? " absent" : ""}${s.ot > 0 && !s.absent ? " has-ot" : ""}" data-i="${i}">
+        <button class="x-btn" data-act="absent" title="${s.absent ? "Mark as present" : "Mark as absent"}">${s.absent ? "↺" : "✕"}</button>
+        <span class="s-who">
+          <span class="s-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
+          <span class="s-shift">${shift}</span>
+        </span>
+        <span class="s-hours">${hours}</span>
+        <span class="s-ot" title="Overtime hours after their shift">${s.absent ? "" : showOt
+          ? `+<input type="number" class="ot-hours" min="0" step="1" placeholder="0" value="${s.ot || ""}">h`
+          : `<button class="ot-btn" data-act="ot">+ OT</button>`}</span>
+      </div>`;
+    };
+    const indexed = shoppers.map((s, i) => [s, i]);
+    const early = indexed.filter(([s]) => !isSameDay(s));
+    const sameDay = indexed.filter(([s]) => isSameDay(s));
+    shopperCard.hidden = !early.length;
+    sameDayCard.hidden = !sameDay.length;
+    shopperList.innerHTML = early.map(([s, i]) => rowHtml(s, i)).join("");
+    sameDayList.innerHTML = sameDay.map(([s, i]) => rowHtml(s, i)).join("");
+    updateShopperSummary();
+  }
+
+  function summaryText(group) {
+    const present = group.filter(s => !s.absent);
+    const hours = present.reduce((sum, s) => sum + workingSlots(s).length / 4, 0);
+    const ot = present.reduce((sum, s) => sum + (s.ot || 0), 0);
+    const absent = group.length - present.length;
+    return `<b>${present.length}</b> of ${group.length} shopping · <b>${fmtDuration(hours)}</b> total` +
+      (absent ? ` · ${absent} absent` : "") + (ot ? ` · incl. ${fmtDuration(ot)} OT` : "");
+  }
+
+  function updateShopperSummary() {
+    shopperSummary.innerHTML = summaryText(shoppers.filter(s => !isSameDay(s)));
+    sameDaySummary.innerHTML = summaryText(shoppers.filter(isSameDay));
+  }
+
+  // Rebuilds the hourly labour plan from the shoppers who are in (same 3-of-4 / lowest rule as the sheet)
+  function applyShoppersToPlan() {
+    const counts = new Array(96).fill(0);
+    shoppers.forEach(s => workingSlots(s).forEach(q => counts[q]++));
+    labourInputs.forEach((input, h) => {
+      input.value = hourlyFigure(counts.slice(h * 4, h * 4 + 4)) || "";
+    });
+  }
+
+  function onShopperClick(e) {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const i = +btn.closest(".shopper").dataset.i;
+    const s = shoppers[i];
+    if (btn.dataset.act === "absent") s.absent = !s.absent;
+    if (btn.dataset.act === "ot") s.otOpen = true;
+    renderShoppers();
+    if (btn.dataset.act === "ot") document.querySelector(`.shopper[data-i="${i}"] .ot-hours`).focus();
+    applyShoppersToPlan();
+    calculate(); save();
+  }
+
+  // Overtime typing: update this row in place so the input keeps focus.
+  // The page-wide "input" listener then recalculates and saves.
+  function onShopperInput(e) {
+    const row = e.target.closest(".shopper");
+    if (!row || !e.target.classList.contains("ot-hours")) return;
+    const s = shoppers[+row.dataset.i];
+    s.ot = Math.max(0, parseFloat(e.target.value) || 0);
+    const { shift, hours } = shopperRowParts(s);
+    row.querySelector(".s-shift").textContent = shift;
+    row.querySelector(".s-hours").textContent = hours;
+    row.classList.toggle("has-ot", s.ot > 0);
+    updateShopperSummary();
+    applyShoppersToPlan();
+  }
+
+  [shopperList, sameDayList].forEach(list => {
+    list.addEventListener("click", onShopperClick);
+    list.addEventListener("input", onShopperInput);
+  });
+
+  // One figure per hour: if 3 of the 4 quarters agree use that, otherwise use the lowest
+  function hourlyFigure(values) {
+    for (const v of values) {
+      if (values.filter(x => x === v).length >= 3) return v;
+    }
+    return Math.min(...values);
+  }
+
+  const uploadInput = document.getElementById("uploadSheet");
+  const uploadStatus = document.getElementById("uploadStatus");
+  function showUploadStatus(type, html) {
+    uploadStatus.className = "upload-status" + (type ? " " + type : "");
+    uploadStatus.innerHTML = html;
+    uploadStatus.hidden = false;
+  }
+
+  // Green bar across the top after a successful upload: shows for 4 seconds, then slides away
+  const successBar = document.getElementById("successBar");
+  let successTimer = null;
+  function showSuccessBar() {
+    clearTimeout(successTimer);
+    successBar.classList.remove("hide");
+    successBar.hidden = false;
+    successTimer = setTimeout(() => {
+      successBar.classList.add("hide");
+      successTimer = setTimeout(() => { successBar.hidden = true; }, 600);
+    }, 4000);
+  }
+
+  // Once a sheet is loaded the Staffing sheet box is hidden; "Clear all" brings it back
+  const sheetCard = document.getElementById("sheetCard");
+  let sheetLoaded = false;
+  function setSheetLoaded(loaded) {
+    sheetLoaded = loaded;
+    sheetCard.hidden = loaded;
+    uploadStatus.hidden = true;
+  }
+
+  uploadInput.addEventListener("change", async () => {
+    const file = uploadInput.files[0];
+    uploadInput.value = ""; // lets the same file be picked again
+    if (!file) return;
+    showUploadStatus("", "Reading staffing sheet…");
+    try {
+      const { quarters, date, shoppers: sheetShoppers } = await readStaffingSheet(file);
+      const hours = Object.keys(quarters).map(Number).sort((a, b) => a - b);
+      if (!hours.length && !sheetShoppers.length) {
+        throw new Error("Couldn't find the Summary of locations table. Is this a Staffing Sheet Detail - Daily report?");
+      }
+      if (labourInputs.some(i => i.value !== "") &&
+          !confirm("Replace the current hourly labour plan with this staffing sheet?")) {
+        uploadStatus.hidden = true;
+        return;
+      }
+
+      // Prefer the individual shoppers (so absences/overtime can be applied);
+      // fall back to the sheet's Scheduled totals if no shopper rows were found
+      shoppers = sheetShoppers;
+      renderShoppers();
+      if (shoppers.length) {
+        applyShoppersToPlan();
+      } else {
+        labourInputs.forEach(i => i.value = "");
+        hours.forEach(h => { labourInputs[h].value = hourlyFigure(quarters[h]) || ""; });
+      }
+
+      // Reveal the early/late hours if the sheet has labour in them
+      if (labourInputs.some((input, h) => isAdditionalHour(h) && input.value !== "") && !showExtraHours.checked) {
+        showExtraHours.checked = true;
+        showExtraHours.dispatchEvent(new Event("change"));
+      }
+
+      // Sheet's in: hide the whole Staffing sheet box until "Clear all"
+      setSheetLoaded(true);
+      showSuccessBar();
+      calculate(); save();
+    } catch (e) {
+      showUploadStatus("bad", e.message || "Could not read that file.");
+    }
+  });
+
+  // ---- Morning message (for the 6am Teams update) ----
+  const morningModal = document.getElementById("morningModal");
+  const morningText = document.getElementById("morningText");
+  const copiedNote = document.getElementById("copiedNote");
+
+  // "Bosley, Angie" -> "Angie Bosley" reads better in a chat message
+  const chatName = name => name.includes(",") ? name.split(",").reverse().map(s => s.trim()).join(" ") : name;
+
+  // Finish time as an hour slot, rounded up: 12:36 -> "1-2pm", 11:20 -> "12-1pm", 10:05 -> "11am-12pm"
+  function finishSlot(minutes) {
+    const start = Math.ceil(Math.ceil(minutes - 1e-9) / 60); // next whole hour (an exact hour stays as it is)
+    const label = h => ({ n: (h % 12) || 12, suffix: h % 24 < 12 ? "am" : "pm" });
+    const a = label(start), b = label(start + 1);
+    return a.suffix === b.suffix ? `${a.n}-${b.n}${b.suffix}` : `${a.n}${a.suffix}-${b.n}${b.suffix}`;
+  }
+
+
+  function buildMorningMessage() {
+    const forecast = num(forecastInput);
+    const totalItems = num(itemsInput);
+    const iph = num(iphInput);
+    const labour = labourInputs.map(num);
+    const totalLabour = labour.reduce((a, b) => a + b, 0);
+
+    const lines = ["Good morning", ""];
+
+    lines.push(`Forecast: ${forecast ? fmt(forecast) + " items" : "-"}`);
+    let actual = totalItems ? `${fmt(totalItems)} items` : "-";
+    if (totalItems && forecast && totalItems !== forecast) {
+      actual += ` (${fmt(Math.abs(totalItems - forecast))} ${totalItems > forecast ? "over" : "under"} forecast)`;
+    }
+    lines.push(`Actual: ${actual}`);
+
+    // Absences: hours lost first, then one name per line
+    const absent = shoppers.filter(s => s.absent);
+    if (absent.length) {
+      const hoursLost = absent.reduce((sum, s) => sum + s.slots.length / 4, 0);
+      lines.push(`Absences: ${fmtDuration(hoursLost)} lost`);
+      absent.forEach(s => lines.push(`- ${chatName(s.name)}`));
+    } else {
+      lines.push("Absences: None");
+    }
+
+    // Estimated finish: the latest check-in's forecast if there is one, otherwise the plan
+    let finishText = "-";
+    if (totalItems && iph) {
+      const fc = forecastFrom(totalItems, iph, labour);
+      if (fc && fc.left <= 0) {
+        finishText = `Picking complete (${fmtTime(fc.t)} check-in)`;
+      } else if (fc) {
+        finishText = fc.finish !== null
+          ? `${finishSlot(fc.finish)} (based on ${fmtTime(fc.t)} check-in)`
+          : `No finish time, ${fmtHours((fc.left - fc.labourLeft * fc.rate) / fc.rate)} labour short (based on ${fmtTime(fc.t)} check-in)`;
+      } else {
+        const finish = findFinish(totalItems, iph, labour);
+        finishText = finish !== null
+          ? finishSlot(finish)
+          : `No finish time, ${fmtHours(totalItems / iph - totalLabour)} labour short`;
+      }
+    }
+    lines.push(`Estimated finish: ${finishText}`);
+    return lines.join("\n");
+  }
+
+  document.getElementById("morningMsg").addEventListener("click", () => {
+    morningText.value = buildMorningMessage();
+    copiedNote.hidden = true;
+    morningModal.hidden = false;
+    morningText.focus();
+  });
+
+  document.getElementById("copyMorning").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(morningText.value);
+    } catch (e) {
+      morningText.select(); // fallback for browsers that block the clipboard on local files
+      document.execCommand("copy");
+    }
+    copiedNote.hidden = false;
+  });
+
+  const closeMorning = () => { morningModal.hidden = true; };
+  document.getElementById("closeMorning").addEventListener("click", closeMorning);
+  morningModal.addEventListener("click", e => { if (e.target === morningModal) closeMorning(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !morningModal.hidden) closeMorning(); });
+
+  // Fills in a sample day (labour starts at 04:00, when picking starts)
+  document.getElementById("testValues").addEventListener("click", () => {
+    document.querySelector(".menu").open = false;
+    const hasData = shoppers.length ||
+      checkins.length || [itemsInput, iphInput, forecastInput, targetIphInput, checkTimeInput, checkLeftInput, ...labourInputs].some(i => i.value !== "");
+    if (hasData && !confirm("Replace current inputs with test values?")) return;
+    forecastInput.value = 37500; targetIphInput.value = 189;
+    itemsInput.value = 36000; iphInput.value = 185;
+    checkTimeInput.value = ""; checkLeftInput.value = "";
+    checkins = []; renderCheckins(); checkinError.hidden = true;
+    shoppers = []; renderShoppers();
+    setSheetLoaded(false);
+    const TEST_LABOUR = [46, 45, 45, 46, 12, 3, 3, 2, 1];
+    labourInputs.forEach((input, h) => {
+      const v = TEST_LABOUR[h - 4];
+      input.value = v === undefined ? "" : v;
+    });
+    calculate(); save();
+  });
+
+  // Insights menu options (hidden by default, remembered separately from the plan data)
   const VIEW_KEY = "pickPlanner.view";
   const showLabour = document.getElementById("showLabour");
   const showBoost = document.getElementById("showBoost");
+  const showTargets = document.getElementById("showTargets");
+  const targetsCard = document.getElementById("targetsCard");
   const showExtraHours = document.getElementById("showExtraHours");
   // Hours outside 04:00 - 17:59 are hidden unless "Show additional hours" is ticked
   const isAdditionalHour = h => h < 4 || h >= 18;
@@ -504,6 +1394,7 @@
   function applyView() {
     labourBox.hidden = !showLabour.checked;
     boostBox.hidden = !showBoost.checked;
+    targetsCard.hidden = !showTargets.checked;
     [...rowsBody.children].forEach((row, h) => {
       row.hidden = isAdditionalHour(h) && !showExtraHours.checked;
     });
@@ -513,15 +1404,30 @@
     const view = JSON.parse(localStorage.getItem(VIEW_KEY)) || {};
     showLabour.checked = !!view.labour;
     showBoost.checked = !!view.boost;
+    showTargets.checked = !!view.targets;
     showExtraHours.checked = !!view.extraHours;
   } catch (e) {}
 
-  [showLabour, showBoost, showExtraHours].forEach(box => box.addEventListener("change", () => {
+  [showLabour, showBoost, showTargets, showExtraHours].forEach(box => box.addEventListener("change", () => {
     applyView();
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({
-        labour: showLabour.checked, boost: showBoost.checked, extraHours: showExtraHours.checked
+        labour: showLabour.checked, boost: showBoost.checked, targets: showTargets.checked,
+        extraHours: showExtraHours.checked
       }));
+    } catch (e) {}
+  }));
+
+  // Left-hand boxes (Forecast, Actual, Progress check-in) can be minimised; remember which are closed
+  const COLLAPSE_KEY = "pickPlanner.collapsed";
+  const collapsibles = [...document.querySelectorAll(".collapsible")];
+  try {
+    const closed = JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || [];
+    collapsibles.forEach(box => { if (closed.includes(box.id)) box.open = false; });
+  } catch (e) {}
+  collapsibles.forEach(box => box.addEventListener("toggle", () => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsibles.filter(b => !b.open).map(b => b.id)));
     } catch (e) {}
   }));
 
